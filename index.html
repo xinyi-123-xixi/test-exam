@@ -2,113 +2,602 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>极简测试</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能考试系统 - 完整智谱版</title>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 文件解析库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        .btn { padding: 10px 20px; background: #4f6ef7; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
-        #preview { margin-top: 20px; border: 1px solid #ccc; padding: 15px; }
-        .question { margin-bottom: 15px; padding: 10px; border: 1px solid #eee; }
+        :root { --primary: #4f6ef7; --success: #22c55e; --warning: #f59e0b; --danger: #ef4444; --bg: #f0f4f8; --card: #fff; --text: #1e293b; --border: #e2e8f0; --radius: 16px; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+        .header { background:linear-gradient(135deg,#1e293b,#334155); color:#fff; padding:16px 0; position:sticky; top:0; z-index:100; }
+        .header-inner { max-width:1300px; margin:0 auto; padding:0 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+        .logo { font-size:1.5rem; font-weight:700; }
+        .nav-tabs { display:flex; gap:6px; }
+        .nav-tab { padding:10px 20px; border-radius:25px; cursor:pointer; font-weight:600; background:rgba(255,255,255,0.08); color:#cbd5e1; border:none; transition:0.2s; }
+        .nav-tab:hover { background:rgba(255,255,255,0.18); color:#fff; }
+        .nav-tab.active { background:#fff; color:#1e293b; }
+        .role-switch { display:flex; align-items:center; gap:8px; }
+        .role-badge { padding:6px 14px; border-radius:20px; font-size:0.8rem; font-weight:600; }
+        .role-badge.admin { background:#fef2f2; color:#dc2626; }
+        .role-badge.student { background:#f0fdf4; color:#166534; }
+        .role-btn { background:none; border:1px solid rgba(255,255,255,0.4); color:#fff; padding:4px 12px; border-radius:15px; cursor:pointer; font-size:0.75rem; }
+        .main-container { max-width:1300px; margin:0 auto; padding:28px 24px; }
+        .section { display:none; }
+        .section.active { display:block; animation:fadeIn 0.3s; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+        .card { background:var(--card); border-radius:var(--radius); padding:28px 30px; margin-bottom:20px; border:1px solid var(--border); box-shadow:0 4px 24px rgba(0,0,0,0.06); }
+        .upload-zone { border:3px dashed #cbd5e1; border-radius:var(--radius); padding:50px 30px; text-align:center; cursor:pointer; background:#f8fafc; transition:0.2s; }
+        .upload-zone:hover,.upload-zone.drag-over { border-color:var(--primary); background:#eef2ff; }
+        .upload-zone input[type="file"] { display:none; }
+        .btn { padding:11px 22px; border-radius:25px; font-weight:600; cursor:pointer; border:none; font-size:0.9rem; display:inline-flex; align-items:center; gap:8px; }
+        .btn-primary{background:var(--primary);color:#fff;} .btn-primary:hover{background:#3b54d4;}
+        .btn-success{background:var(--success);color:#fff;} .btn-outline{background:#fff;border:2px solid var(--border);}
+        .btn-outline:hover{border-color:var(--primary);color:var(--primary);} .btn-danger{background:var(--danger);color:#fff;}
+        .btn-sm{padding:6px 14px;font-size:0.8rem;border-radius:20px;} .btn:disabled{opacity:0.5;pointer-events:none;}
+        .form-input{width:100%;padding:11px 16px;border:2px solid var(--border);border-radius:10px;font-size:0.95rem;background:#fafbfc;}
+        .form-input:focus{outline:none;border-color:var(--primary);}
+        .timer-bar{background:#1e293b;color:#fff;padding:12px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;font-weight:600;position:sticky;top:80px;z-index:50;}
+        .timer-bar.warning{background:#ef4444;animation:pulse 1s infinite;} @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.5)}50%{box-shadow:0 0 0 16px rgba(239,68,68,0)}}
+        .violation-count{background:#fef2f2;color:#dc2626;padding:6px 14px;border-radius:20px;}
+        .paper-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+        .paper-item{padding:12px 16px;border:2px solid #e2e8f0;border-radius:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:0.2s;}
+        .paper-item:hover{border-color:var(--primary);background:#f8fafc;} .paper-item.selected{border-color:var(--primary);background:#eff6ff;font-weight:600;}
+        .question-block{margin-bottom:16px;padding:14px 16px;border-radius:10px;background:#fff;border:1px solid #f1f5f9; position:relative;}
+        .options-list{list-style:none;padding:0;} .options-list li{padding:7px 12px;margin:3px 0;border-radius:8px;cursor:pointer;border:1.5px solid transparent;transition:0.2s;}
+        .options-list li:hover{background:#f8fafc;} .options-list li.selected{background:#eff6ff;border-color:var(--primary);}
+        .table-wrapper{overflow-x:auto;border-radius:10px;border:1px solid var(--border);}
+        table{width:100%;border-collapse:collapse;font-size:0.85rem;min-width:1000px;} th,td{padding:10px 14px;border-bottom:1px solid #f1f5f9;text-align:left;}
+        thead{background:#f8fafc;} th{font-weight:700;color:#475569;}
+        .score-badge{display:inline-block;padding:4px 12px;border-radius:15px;font-weight:700;}
+        .score-high{background:#f0fdf4;color:#166534;} .score-mid{background:#fff7ed;color:#c2410c;} .score-low{background:#fef2f2;color:#991b1b;}
+        .toast{position:fixed;top:24px;right:24px;padding:14px 22px;border-radius:25px;color:#fff;font-weight:600;z-index:9999;animation:slideIn 0.3s;}
+        @keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+        .toast-success{background:#22c55e;} .toast-error{background:#ef4444;} .toast-warning{background:#f59e0b;color:#1e293b;}
+        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:flex;align-items:center;justify-content:center;}
+        .modal{background:#fff;border-radius:var(--radius);padding:30px;max-width:750px;width:90%;text-align:center;}
+        .score-display{font-size:4rem;font-weight:900;color:var(--primary);margin:16px 0;}
+        .feedback-box{background:#f8fafc;border-radius:10px;padding:16px;margin-top:12px;text-align:left;font-size:0.9rem;line-height:1.7;}
+        .compare-select { display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+        @media(max-width:768px){.header-inner{flex-direction:column}.card{padding:18px 16px}.btn{padding:9px 16px;font-size:0.8rem}}
     </style>
 </head>
 <body>
-    <h2>极简测试 - 智谱 API 出题</h2>
-    <textarea id="notes" rows="6" cols="80" placeholder="请粘贴至少200字的笔记内容...">这是一段测试笔记，内容足够长，超过了200个字符。人工智能是计算机科学的一个分支，它企图了解智能的实质，并生产出一种新的能以人类智能相似的方式做出反应的智能机器。</textarea><br>
-    <button class="btn" id="generate-btn">🎯 生成试卷</button>
-    <div id="preview"></div>
+<header class="header">
+    <div class="header-inner">
+        <div class="logo">📝 智能考试系统</div>
+        <nav class="nav-tabs" id="nav-tabs">
+            <button class="nav-tab active" data-section="exam">🖥️ 在线考试</button>
+            <button class="nav-tab" data-section="admin">📤 试卷管理</button>
+            <button class="nav-tab" data-section="records">📊 总表记录</button>
+        </nav>
+        <div class="role-switch">
+            <span class="role-badge student" id="role-badge">👤 考生模式</span>
+            <button class="role-btn" id="role-toggle-btn">切换</button>
+        </div>
+    </div>
+</header>
 
-    <script>
-        // 智谱配置（请替换为您的真实 Key）
-        const API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-        const API_KEY = 'ee8ed5b1897242d6be8389dcf7437572.qezzF0yP5pT95DA7';  // ⚠️ 替换这里
-        const MODEL = 'glm-4-flash';
+<div class="main-container">
+    <!-- 考试页面 -->
+    <section class="section active" id="exam-section">
+        <div class="card" id="exam-select-card">
+            <div class="card-header">📚 选择试卷</div>
+            <div id="paper-list-container"></div>
+            <div style="margin-top:16px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+                <div><label style="font-size:0.9rem;">工号</label><input type="text" class="form-input" id="exam-student-id" style="width:120px;"></div>
+                <div><label style="font-size:0.9rem;">姓名</label><input type="text" class="form-input" id="exam-student-name" style="width:120px;"></div>
+                <button class="btn btn-primary" id="begin-exam-btn" disabled>开始考试 ▶</button>
+            </div>
+            <p id="exam-login-hint" style="margin-top:6px;color:#94a3b8;"></p>
+        </div>
+        <div id="exam-interface" style="display:none;">
+            <div class="timer-bar" id="timer-bar">
+                <span>⏱️ 剩余：<strong id="timer-display">30:00</strong></span>
+                <span id="exam-info-display"></span>
+                <span class="violation-count" id="violation-display">⚠️ 违规：0</span>
+            </div>
+            <div class="card"><div id="exam-questions-container"></div><button class="btn btn-success" id="submit-exam-btn" style="margin-top:20px;">✅ 提交考卷</button></div>
+        </div>
+    </section>
+    <!-- 管理页面 -->
+    <section class="section" id="admin-section">
+        <div class="card">
+            <div class="card-header">📤 上传学习笔记</div>
+            <div class="upload-zone" id="upload-zone">
+                <div style="font-size:3rem;">📁</div>
+                <p><strong>拖拽文件到此处</strong> 或点击选择（可多选）</p>
+                <span style="font-size:0.8rem;color:#94a3b8;">支持 .txt .md .docx .xlsx .pdf</span>
+                <input type="file" id="file-input" multiple accept=".txt,.md,.json,.csv,.docx,.xlsx,.pdf">
+            </div>
+            <div style="margin-top:12px;"><button class="btn btn-outline btn-sm" id="paste-text-btn">📋 粘贴文本</button></div>
+            <div id="paste-area" style="display:none;margin-top:12px;">
+                <textarea class="form-input" id="pasted-text" rows="3" placeholder="在此粘贴笔记..."></textarea>
+                <button class="btn btn-primary btn-sm" id="confirm-paste">确认使用</button>
+            </div>
+            <div style="margin-top:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                <input type="text" class="form-input" id="paper-name-input" placeholder="试卷名称" style="flex:1;">
+                <button class="btn btn-primary" id="generate-paper-btn">🎯 生成试卷</button>
+                <button class="btn btn-outline btn-sm" id="clear-content-btn">清除内容</button>
+            </div>
+            <div id="upload-status" style="margin-top:8px;color:#64748b;"></div>
+        </div>
+        <div class="card">
+            <div class="card-header">📋 试卷管理列表</div>
+            <div id="admin-paper-list"></div>
+        </div>
+        <!-- 试卷预览卡片 -->
+        <div class="card" id="paper-preview-card" style="display:none;">
+            <div class="card-header">📝 试卷预览 <span id="preview-paper-name"></span></div>
+            <div id="paper-preview-list"></div>
+            <div style="margin-top:20px;display:flex;gap:12px;">
+                <button class="btn btn-success" id="confirm-paper-btn">✅ 确认并保存试卷</button>
+                <button class="btn btn-outline" id="cancel-preview-btn">取消</button>
+            </div>
+        </div>
+    </section>
+    <!-- 记录页面 -->
+    <section class="section" id="records-section">
+        <div class="card">
+            <div class="card-header">📊 考试记录总表
+                <button class="btn btn-outline btn-sm" id="export-csv-btn" style="margin-left:auto;">📥 导出CSV</button>
+                <button class="btn btn-danger btn-sm" id="clear-records-btn">🗑️ 清空全部</button>
+            </div>
+            <div class="compare-select">
+                <button class="btn btn-warning btn-sm" id="compare-btn" style="background:#f59e0b;color:#fff;">📋 生成对比报告</button>
+                <span style="font-size:0.8rem;color:#64748b;">💡 勾选记录后可生成对比报告</span>
+            </div>
+            <div class="table-wrapper">
+                <table><thead><tr><th><input type="checkbox" id="select-all-records"></th><th>序号</th><th>时间</th><th>试卷</th><th>工号</th><th>姓名</th><th>得分</th><th>正确</th><th>违规</th><th>用时</th><th>操作</th></tr></thead>
+                    <tbody id="records-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
 
-        // 简易工具函数
-        function cleanText(str) { return str ? str.replace(/[^\x00-\x7F\u4e00-\u9fa5]/g, '').trim() : ''; }
-        function toast(msg) { alert(msg); }
+<div id="toast-container"></div>
+<div class="modal-overlay" id="settings-modal" style="display:none;">
+    <div class="modal"><h2>⚙️ 试卷设置</h2><div style="text-align:left;margin:12px 0;"><label><input type="checkbox" id="setting-visible"> 对考生公开</label></div>
+    <button class="btn btn-primary" id="save-settings-btn">保存</button><button class="btn btn-outline" id="cancel-settings-btn">取消</button></div>
+</div>
+<div class="modal-overlay" id="result-modal" style="display:none;">
+    <div class="modal"><h2>📊 考试成绩</h2><div class="score-display" id="result-score">0</div><p id="result-detail"></p><p id="result-violation"></p>
+        <div class="feedback-box" id="feedback-box"></div>
+        <button class="btn btn-success" id="view-detail-btn">📋 查看解析与建议</button>
+        <button class="btn btn-outline" id="close-result-btn">关闭</button></div>
+</div>
+<div class="modal-overlay" id="detail-modal" style="display:none;">
+    <div class="modal"><h2>📋 答题详情与学习建议</h2><div id="detail-content" style="max-height:400px;overflow-y:auto;text-align:left;"></div><button class="btn btn-primary" id="close-detail-btn">关闭</button></div>
+</div>
+<div class="modal-overlay" id="compare-modal" style="display:none;">
+    <div class="modal"><h2>📋 多考生对比报告</h2><div id="compare-content" style="max-height:450px;overflow-y:auto;text-align:left;"></div><button class="btn btn-primary" id="close-compare-btn">关闭</button></div>
+</div>
 
-        // AI 出题引擎（极简版）
-        async function generatePaper(content, paperName) {
-            const prompt = `你是教育专家。基于笔记生成试卷，严格输出20道题：7单选（4选项）、7多选（5选项）、6判断。题目完整，选项至少5字。只输出JSON格式。笔记：${content.substring(0, 8000)}`;
+<script>
+// ==================== 全局配置 ====================
+const SUPABASE_URL = 'https://vlpwtmfgjxveuswiuufl.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_tviG7d9Hq7Yv8W2LrokevA_NOM2nRV0';
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-            console.log('开始请求 API...');
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${API_KEY}` },
-                body: JSON.stringify({
-                    model: MODEL,
-                    messages: [
-                        { role: 'system', content: '你只返回纯净JSON。' },
-                        { role: 'user', content: prompt }
-                    ],
-                    temperature: 0.2,
-                    max_tokens: 4000
-                })
-            });
+const $ = s => document.getElementById(s);
+const $$ = s => document.querySelectorAll(s);
+const ADMIN_PASS = 'admin123';
+let role = 'student', selPaperId = null, curPaper = null, curSetId = null;
+const S = { content:'', inExam:false, timer:null, left:1800, vc:0, sid:'', sname:'', answers:[], start:null };
+let selectedRecordIds = new Set();
+let previewPaper = null;
+let previewQuestions = [];
 
-            if (!response.ok) {
-                const err = await response.text();
-                throw new Error(`HTTP ${response.status}: ${err}`);
-            }
+// ==================== 工具函数 ====================
+function toast(msg, err){ const d=document.createElement('div'); d.className='toast '+(err?'toast-error':'toast-success'); d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),2500); }
+function esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function fmt(s){ const m=Math.floor(s/60), sec=s%60; return `${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`; }
+if (typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+function cleanText(str) { return str ? str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\u200B-\u200F\u2028-\u202F\uFEFF\u2022\uFF07\uFF02\u00A0]/g,'').replace(/\s+/g,' ').trim() : ''; }
 
-            const data = await response.json();
-            console.log('API 原始返回:', data);
-            const aiOutput = data.choices[0].message.content;
-            const jsonStr = aiOutput.replace(/```json|```/g, '').trim();
-            const result = JSON.parse(jsonStr);
+// ==================== 角色与页面切换 ====================
+function setRole(r){
+    role=r; document.body.classList.toggle('admin-mode', r==='admin');
+    const badge = $('role-badge'); if(badge){ badge.textContent = r==='admin'?'🔒 管理员':'👤 考生'; badge.className = 'role-badge '+(r==='admin'?'admin':'student'); }
+    $$('.nav-tab').forEach(tab=>{
+        const sec=tab.dataset.section;
+        if(sec==='admin'||sec==='records') tab.style.display = r==='admin'?'':'none';
+    });
+    if(r!=='admin' && ($('admin-section')?.classList.contains('active')||$('records-section')?.classList.contains('active'))) switchSec('exam');
+    refreshAll();
+    if(r==='admin' && $('records-section')?.classList.contains('active')) loadRecords();
+}
+function switchSec(name){
+    ['exam','admin','records'].forEach(n=>{ const el = $(n+'-section'); if(el) el.classList.remove('active'); });
+    const target = $(name+'-section'); if(target) target.classList.add('active');
+    $$('.nav-tab').forEach(tab=>tab.classList.toggle('active', tab.dataset.section===name));
+    refreshAll();
+    if(name==='records' && role==='admin') loadRecords();
+}
+$$('.nav-tab').forEach(tab=>tab.addEventListener('click', ()=>switchSec(tab.dataset.section)));
+$('role-toggle-btn')?.addEventListener('click', ()=>{
+    if(role==='admin'){ setRole('student'); return; }
+    const p=prompt('密码：'); if(p===ADMIN_PASS) setRole('admin'); else if(p!==null) alert('密码错误');
+});
 
-            if (!result.questions || result.questions.length < 20) {
-                throw new Error('题目数量不足20题');
-            }
-
-            // 简单清洗
-            result.questions = result.questions.slice(0, 20).map(q => {
-                q.text = cleanText(q.text) || `第?题`;
-                q.options = (q.options || []).map(o => cleanText(o) || '选项');
-                q.explanation = cleanText(q.explanation || '无解析');
-                return q;
-            });
-
-            return { name: paperName, questions: result.questions };
+// ==================== 数据交互 ====================
+async function refreshAll(){
+    try {
+        const { data, error } = await client.from('papers').select('*');
+        if (error) throw error;
+        const papers = {}; data.forEach(doc => papers[doc.id] = doc);
+        const examList = $('paper-list-container'); const adminList = $('admin-paper-list');
+        let eh='', ah='';
+        for(const id in papers){
+            const p = papers[id];
+            if(role==='student' && p.visible===false) continue;
+            eh+=`<div class="paper-item ${selPaperId===id?'selected':''}" onclick="selPaper('${id}',this)"><span>📄 ${esc(p.name)}</span></div>`;
+            ah+=`<div style="display:flex;justify-content:space-between;padding:8px 0;"><span>📄 ${esc(p.name)} (${p.visible===false?'隐藏':'公开'})</span><span><button class="btn btn-sm btn-outline" onclick="openSet('${id}')">设置</button> <button class="btn btn-sm btn-danger" onclick="delPaper('${id}')">删除</button></span></div>`;
         }
+        if(examList) examList.innerHTML=eh||'<p>暂无试卷</p>';
+        if(adminList) adminList.innerHTML=ah||'<p>暂无试卷</p>';
+        updateExamState();
+    } catch (e) { console.error(e); toast('加载失败', true); }
+}
+window.selPaper=(id,el)=>{ $$('.paper-item').forEach(i=>i.classList.remove('selected')); el.classList.add('selected'); selPaperId=id; updateExamState(); };
+window.delPaper=async(id)=>{ if(confirm('删除？')){ await client.from('papers').delete().eq('id', id); if(selPaperId===id) selPaperId=null; refreshAll(); } };
+window.openSet=(id)=>{ curSetId=id; client.from('papers').select('*').then(({data})=>{ if(data && data.length){ const p=data[0]; const cb = $('setting-visible'); if(cb) cb.checked=p.visible!==false; } $('settings-modal').style.display='flex'; }); };
+$('save-settings-btn')?.addEventListener('click', async()=>{ if(!curSetId) return; await client.from('papers').update({visible:$('setting-visible')?.checked ?? true}).eq('id', curSetId); $('settings-modal').style.display='none'; refreshAll(); });
+$('cancel-settings-btn')?.addEventListener('click', ()=> { $('settings-modal').style.display='none'; });
 
-        // 预览函数
-        function showPreview(paper) {
-            let html = `<h3>试卷预览：${paper.name}</h3>`;
-            paper.questions.forEach((q, idx) => {
-                html += `<div class="question">
-                    <strong>第${idx+1}题</strong> (${q.type})<br>
-                    ${q.text}<br>`;
-                if (q.type !== 'judge') {
-                    q.options.forEach((opt, oi) => html += `${String.fromCharCode(65+oi)}. ${opt}<br>`);
-                }
-                html += `<small>答案：${q.correctAnswer || q.correctLabel || (q.correctLabels||[]).join(',')}</small><br>
-                <small>解析：${q.explanation}</small></div>`;
-            });
-            document.getElementById('preview').innerHTML = html;
-        }
+async function updateExamState(){
+    const idOk = $('exam-student-id')?.value.trim() && $('exam-student-name')?.value.trim();
+    const btn = $('begin-exam-btn');
+    if(!selPaperId || !idOk){ if(btn) btn.disabled=true; return; }
+    const { data } = await client.from('records').select('*').eq('paper_id', selPaperId).eq('student_id', $('exam-student-id').value.trim());
+    const done = data && data.length > 0;
+    if(btn) btn.disabled=done;
+    const hint = $('exam-login-hint'); if(hint){ hint.textContent=done?'您已考过':'✅ 可开始'; hint.style.color=done?'#ef4444':'#22c55e'; }
+}
+$('exam-student-id')?.addEventListener('input', updateExamState);
+$('exam-student-name')?.addEventListener('input', updateExamState);
 
-        // 按钮事件
-        document.getElementById('generate-btn').addEventListener('click', async () => {
-            const content = document.getElementById('notes').value.trim();
-            if (content.length < 200) {
-                toast('笔记内容不足200字，请粘贴更多内容');
-                return;
-            }
-            const btn = document.getElementById('generate-btn');
-            btn.disabled = true;
-            btn.textContent = '⏳ 生成中...';
-            try {
-                const paper = await generatePaper(content, '测试卷');
-                console.log('生成成功', paper);
-                showPreview(paper);
-            } catch (e) {
-                console.error('生成失败', e);
-                toast('生成失败：' + e.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '🎯 生成试卷';
-            }
+// ==================== 文件上传处理 ====================
+async function processMultipleFiles(files){
+    let text='';
+    for(const f of files){
+        const ext=f.name.split('.').pop().toLowerCase();
+        if(['txt','md','json','csv'].includes(ext)) text+=await f.text()+'\n\n';
+        else if(ext==='docx'){ const buf=await f.arrayBuffer(); const res=await mammoth.extractRawText({arrayBuffer:buf}); text+=res.value+'\n\n'; }
+        else if(ext==='xlsx'){ const buf=await f.arrayBuffer(); const wb=XLSX.read(new Uint8Array(buf),{type:'array'}); wb.SheetNames.forEach(s=>text+=XLSX.utils.sheet_to_csv(wb.Sheets[s])+'\n'); }
+        else if(ext==='pdf'){ try{ const buf=await f.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise; let pt=''; for(let i=1;i<=pdf.numPages;i++){ const page=await pdf.getPage(i); const content=await page.getTextContent(); pt+=content.items.map(item=>item.str).join(' ')+'\n'; } text+=pt+'\n\n'; }catch(e){ toast('PDF解析失败',true); } }
+    }
+    if(text.trim().length<200){ toast('内容过短',true); return; }
+    S.content=text; const st = $('upload-status'); if(st) st.textContent='✅ 已加载文件'; toast('文件加载成功');
+}
+$('upload-zone')?.addEventListener('click', ()=>$('file-input')?.click());
+$('file-input')?.addEventListener('change', e=>{ if(e.target.files.length) processMultipleFiles(Array.from(e.target.files)); });
+$('upload-zone')?.addEventListener('dragover', e=>{ e.preventDefault(); e.currentTarget.classList.add('drag-over'); });
+$('upload-zone')?.addEventListener('dragleave', e=>{ e.currentTarget.classList.remove('drag-over'); });
+$('upload-zone')?.addEventListener('drop', e=>{ e.preventDefault(); e.currentTarget.classList.remove('drag-over'); if(e.dataTransfer.files.length) processMultipleFiles(Array.from(e.dataTransfer.files)); });
+$('paste-text-btn')?.addEventListener('click', ()=>{ $('paste-area').style.display='block'; $('pasted-text')?.focus(); });
+$('confirm-paste')?.addEventListener('click', ()=>{ const t=$('pasted-text')?.value.trim(); if(!t) return toast('请粘贴',true); S.content=t; const st=$('upload-status'); if(st) st.textContent='✅ 已粘贴文本'; $('paste-area').style.display='none'; });
+$('clear-content-btn')?.addEventListener('click', ()=>{ S.content=''; const st=$('upload-status'); if(st) st.textContent=''; });
+
+// ==================== AI 出题引擎 (智谱) ====================
+async function generatePaperOptimized(content, paperName) {
+    const API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+    const API_KEY = 'ee8ed5b1897242d6be8389dcf7437572.qezzF0yP5pT95DA7';  // ⚠️ 替换为真实的智谱 Key
+    const MODEL = 'glm-4-flash';
+    const prompt = `你是教育专家。基于笔记生成试卷。必须严格输出恰好20道题：7道单选题（4选项）、7道多选题（5选项）、6道判断题。规则：1. 题目完整清晰，禁止省略号。2. 选项至少5字，与题目相关。3. 解析包含正确答案或错因，不能为空。4. 随机排列选项。5. 严格输出JSON。笔记：${content.substring(0, 8000)}`;
+    try {
+        const response = await fetch(API_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${API_KEY}` }, body:JSON.stringify({ model:MODEL, messages:[{role:'system', content:'你输出纯净JSON。解析必须具体，不能省略。'},{role:'user', content:prompt}], temperature:0.2, max_tokens:12000 }) });
+        if (!response.ok) throw new Error('HTTP '+response.status);
+        const data = await response.json();
+        const aiOutput = data.choices[0].message.content;
+        const jsonStr = aiOutput.replace(/```json|```/g,'').trim();
+        const result = JSON.parse(jsonStr);
+        let questions = (result.questions || []).slice(0,20);
+        if (questions.length < 20) { const fb = generatePaperFallback(content, paperName); questions = questions.concat(fb.questions.slice(0,20-questions.length)); }
+        const singles = questions.filter(q => q.type === 'single').slice(0,7);
+        const multiples = questions.filter(q => q.type === 'multiple').slice(0,7);
+        const judges = questions.filter(q => q.type === 'judge').slice(0,6);
+        questions = [...singles, ...multiples, ...judges].slice(0,20);
+        questions = questions.map((q, idx) => {
+            q.text = cleanText(q.text) || `请根据笔记回答第${idx+1}题`;
+            if (q.type === 'multiple' && !q.text.includes('多选')) q.text += '（多选）';
+            if (!Array.isArray(q.options) || q.options.length===0) { q.options = q.type==='multiple' ? ['选项A','选项B','选项C','选项D','选项E'] : ['选项A','选项B','选项C','选项D']; }
+            q.options = q.options.map(o => cleanText(o) || '待补充');
+            if (!q.explanation || q.explanation.trim()==='') { if (q.type==='single') q.explanation = `正确答案是${q.correctLabel || 'A'}。`; else if (q.type==='multiple') q.explanation = `正确选项为${(q.correctLabels||['A','B']).join('、')}。`; else q.explanation = q.correctAnswer==='正确'?'该说法正确。':'该说法错误。'; }
+            q.explanation = cleanText(q.explanation);
+            return q;
         });
-    </script>
+        return { name:paperName, questions, visible:true, created_at:new Date().toISOString() };
+    } catch(e) { console.error(e); toast('AI出题失败，使用备用方案',true); return generatePaperFallback(content, paperName); }
+}
+function generatePaperFallback(content, paperName) { /* 备用方案保持不变 */ const sentences = content.replace(/[\r\n]+/g, '\n').split(/[。！？.!?\n]+/).filter(s => s.trim().length > 10); while (sentences.length < 20) sentences.push('本知识点需要掌握核心概念与特征'); const questions = []; for (let i = 0; i < 7; i++) { const s = sentences[i]; const term = cleanText(s.substring(0, 15)); questions.push({ type:'single', text:`关于“${term}”，以下说法正确的是？`, options:[`${term}的定义`,`与${term}相反的概念`,`不属于${term}的范畴`,`对${term}的常见误解`].map(cleanText), correctIndex:0, correctLabel:'A', explanation:'请参考笔记。' }); } for (let i = 0; i < 7; i++) { const s = sentences[i+7]; const term = cleanText(s.substring(0, 15)); const opts = [`${term}的特征`,`${term}的条件`,`${term}的类型`,`无关表述`,`错误解释`].map(cleanText); questions.push({ type:'multiple', text:`以下哪些属于“${term}”的相关内容？（多选）`, options:opts, correctIndices:[0,1], correctLabels:['A','B'], explanation:'正确选项与笔记相关。' }); } for (let i = 0; i < 6; i++) { const s = sentences[i+14]; const isTrue = Math.random() > 0.5; let statement = cleanText(s.length > 60 ? s.substring(0, 60) + '（判断对错）' : s + '（判断对错）'); if (!isTrue) statement = '以下说法是否正确：' + statement; questions.push({ type:'judge', text:statement, correctAnswer:isTrue?'正确':'错误', explanation:isTrue?'陈述与笔记一致。':'陈述与笔记不符，请查阅原文。' }); } return { name:paperName, questions, visible:true, created_at:new Date().toISOString() }; }
+
+// ==================== 试卷预览与编辑 ====================
+function renderPaperPreview(paper) {
+    previewPaper = paper;
+    previewQuestions = [...paper.questions];
+    $('#paper-preview-card').style.display = 'block';
+    $('#preview-paper-name').textContent = `- ${paper.name}`;
+    refreshPreviewList();
+}
+function refreshPreviewList() {
+    let html = '';
+    previewQuestions.forEach((q, idx) => {
+        html += `<div class="question-block">
+            <div style="position:absolute;top:8px;right:8px;">
+                <button class="btn btn-sm btn-danger" onclick="deleteQuestion(${idx})">🗑️ 删除</button>
+                <button class="btn btn-sm btn-outline" onclick="replaceQuestion(${idx})">🔄 替换</button>
+            </div>
+            <strong>第${idx+1}题</strong> (${q.type==='single'?'单选':q.type==='multiple'?'多选':'判断'})<br>
+            ${esc(q.text)}<br>`;
+        if (q.type !== 'judge') {
+            q.options.forEach((opt, oi) => { html += `&nbsp;&nbsp;${String.fromCharCode(65+oi)}. ${esc(opt)}<br>`; });
+        }
+        html += `<small style="color:#22c55e;">答案：${q.correctAnswer || q.correctLabel || (q.correctLabels||[]).join(',')}</small><br>
+        <small>解析：${esc(q.explanation||'')}</small></div>`;
+    });
+    $('#paper-preview-list').innerHTML = html || '<p>暂无题目</p>';
+}
+async function deleteQuestion(idx) {
+    if (!confirm('确定删除这道题吗？')) return;
+    previewQuestions.splice(idx, 1);
+    refreshPreviewList();
+}
+async function replaceQuestion(idx) {
+    const oldQ = previewQuestions[idx];
+    const type = oldQ.type;
+    const prompt = `请根据以下笔记内容生成一道${type==='single'?'单选题（4个选项）':type==='multiple'?'多选题（5个选项）':'判断题'}，要求与之前不同。笔记：${S.content.substring(0, 3000)}`;
+    try {
+        const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json', 'Authorization':'Bearer 您的智谱API密钥' }, // 这里也要替换
+            body: JSON.stringify({ model:'glm-4-flash', messages:[{role:'system', content:'你只返回JSON格式的一道题目，不要其他文字。格式：{"type":"...","text":"...","options":[...],"correctIndex":0,"correctLabel":"A","explanation":"..."}'},{role:'user', content:prompt}], temperature:0.3, max_tokens:1024 })
+        });
+        if (!response.ok) throw new Error('生成失败');
+        const data = await response.json();
+        const jsonStr = data.choices[0].message.content.replace(/```json|```/g,'').trim();
+        const newQ = JSON.parse(jsonStr);
+        newQ.text = cleanText(newQ.text);
+        newQ.options = newQ.options.map(o => cleanText(o));
+        newQ.explanation = cleanText(newQ.explanation || '');
+        previewQuestions[idx] = newQ;
+        refreshPreviewList();
+        toast('替换成功');
+    } catch(e) { console.error(e); toast('替换失败，请重试', true); }
+}
+async function confirmPaper() {
+    if (previewQuestions.length === 0) { toast('试卷题目不能为空', true); return; }
+    const finalPaper = { name: previewPaper.name, questions: previewQuestions, visible: true, created_at: new Date().toISOString() };
+    try {
+        await client.from('papers').insert(finalPaper);
+        toast('试卷保存成功！');
+        $('#paper-preview-card').style.display = 'none';
+        previewPaper = null; previewQuestions = [];
+        refreshAll();
+    } catch(e) { console.error(e); toast('保存失败', true); }
+}
+function cancelPreview() {
+    if (confirm('取消将丢失所有修改，确定吗？')) {
+        $('#paper-preview-card').style.display = 'none';
+        previewPaper = null; previewQuestions = [];
+    }
+}
+$('#confirm-paper-btn')?.addEventListener('click', confirmPaper);
+$('#cancel-preview-btn')?.addEventListener('click', cancelPreview);
+
+// ==================== 生成试卷按钮事件（直接绑定） ====================
+document.getElementById('generate-paper-btn').addEventListener('click', async function() {
+    if(!S.content || S.content.trim().length < 200) {
+        toast('请先上传至少200字笔记', true);
+        return;
+    }
+    const name = $('paper-name-input')?.value.trim() || ('试卷 ' + new Date().toLocaleString());
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ AI 正在出题...';
+    try {
+        const paper = await generatePaperOptimized(S.content, name);
+        renderPaperPreview(paper);
+        toast('试卷生成成功，请在下方预览和编辑');
+    } catch (e) {
+        toast('生成失败: ' + e.message, true);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🎯 生成试卷';
+    }
+});
+
+// ==================== 考试流程 ====================
+$('begin-exam-btn')?.addEventListener('click', async ()=>{
+    if(!selPaperId) return;
+    const { data: existing } = await client.from('records').select('*').eq('paper_id', selPaperId).eq('student_id', $('exam-student-id')?.value.trim());
+    if (existing && existing.length > 0) { toast('您已考过此试卷，无法再次考试', true); return; }
+    const { data: paperData } = await client.from('papers').select('*').eq('id', selPaperId); curPaper = paperData?.[0];
+    if(!curPaper) return;
+    S.sid = $('exam-student-id')?.value.trim(); S.sname = $('exam-student-name')?.value.trim();
+    if(!S.sid || !S.sname) { toast('请填写工号和姓名', true); return; }
+    S.left = 1800; S.vc = 0; S.answers = new Array(20).fill(null); S.start = new Date(); S.inExam = true;
+    const examSelect = $('exam-select-card'); if(examSelect) examSelect.style.display = 'none';
+    const examUI = $('exam-interface'); if(examUI) examUI.style.display = 'block';
+    const timerEl = $('timer-display'); if(timerEl) timerEl.textContent = fmt(S.left);
+    const violEl = $('violation-display'); if(violEl) violEl.textContent = '违规:0';
+    const infoEl = $('exam-info-display'); if(infoEl) infoEl.textContent = `${S.sid} ${S.sname} | ${curPaper.name}`;
+    renderQuestions();
+    S.timer = setInterval(()=>{ S.left--; const t = $('timer-display'); if(t) t.textContent = fmt(S.left); if(S.left<=0) submitExam(); if(S.left<=60){ const tb = $('timer-bar'); if(tb) tb.classList.add('warning'); } }, 1000);
+    document.addEventListener('visibilitychange', ()=>{ if(document.hidden && S.inExam){ S.vc++; const v = $('violation-display'); if(v) v.textContent = '违规:'+S.vc; } });
+    window.addEventListener('blur', ()=>{ if(S.inExam){ S.vc++; const v = $('violation-display'); if(v) v.textContent = '违规:'+S.vc; } });
+});
+function renderQuestions(){
+    const container = $('exam-questions-container'); if(!container) return;
+    let html=''; curPaper.questions.forEach((q,idx)=>{
+        html+=`<div class="question-block"><strong>第${idx+1}题</strong><br>${q.text}<br>`;
+        if(q.type==='single') q.options.forEach((o,i)=>html+=`<label><input type="radio" name="q${idx}" onchange="setS(${idx},'${String.fromCharCode(65+i)}')"> ${String.fromCharCode(65+i)}. ${o}</label><br>`);
+        else if(q.type==='multiple') q.options.forEach((o,i)=>html+=`<label><input type="checkbox" onchange="setM(${idx},'${String.fromCharCode(65+i)}',this.checked)"> ${String.fromCharCode(65+i)}. ${o}</label><br>`);
+        else html+=`<label><input type="radio" name="j${idx}" onchange="setJ(${idx},'正确')"> ✅ 正确</label> <label><input type="radio" name="j${idx}" onchange="setJ(${idx},'错误')"> ❌ 错误</label>`;
+        html+='</div>';
+    });
+    container.innerHTML=html;
+}
+function setS(i,v){ S.answers[i]=v; }
+function setM(i,v,c){ if(!Array.isArray(S.answers[i])) S.answers[i]=[]; if(c) S.answers[i].push(v); else S.answers[i]=S.answers[i].filter(x=>x!==v); }
+function setJ(i,v){ S.answers[i]=v; }
+$('submit-exam-btn')?.addEventListener('click', ()=>{ if(S.inExam) submitExam(); });
+async function submitExam(){
+    clearInterval(S.timer); S.inExam = false;
+    if (!curPaper) return;
+    let correct = 0; const details = [];
+    curPaper.questions.forEach((q, idx) => {
+        const ua = S.answers[idx]; let ok = false;
+        if (q.type === 'single') ok = (ua === q.correctLabel);
+        else if (q.type === 'multiple') { const u = Array.isArray(ua) ? ua.sort() : []; const c = (q.correctLabels || []).sort(); ok = JSON.stringify(u) === JSON.stringify(c); }
+        else ok = (ua === q.correctAnswer);
+        if (ok) correct++;
+        details.push({ type: q.type, questionText: q.text, userAnswer: ua, correctAnswer: q.correctAnswer || q.correctLabels, isCorrect: ok, explanation: q.explanation });
+    });
+    const dur = fmt(Math.min(Math.round((new Date() - S.start) / 1000), 1800));
+    const score = correct * 5;
+    const record = { paper_id: selPaperId, student_id: S.sid, student_name: S.sname, score, correct_count: correct, total_questions: 20, violations: S.vc, duration: dur, details, exam_date: new Date().toISOString(), paper_name: curPaper.name };
+    try {
+        const { error } = await client.from('records').insert(record);
+        if (error) throw error;
+        toast('考试记录已保存');
+    } catch (e) { console.error('记录保存失败', e); toast('记录保存失败: ' + e.message, true); refreshAll(); return; }
+    const enhancedFeedback = generateEnhancedFeedback(details);
+    const rs = $('result-score'); if(rs) rs.textContent = score + '分';
+    const rd = $('result-detail'); if(rd) rd.textContent = `正确 ${correct}/20 | 用时 ${dur}`;
+    const fb = $('feedback-box'); if(fb) fb.innerHTML = enhancedFeedback;
+    const rm = $('result-modal'); if(rm) rm.style.display = 'flex';
+    const vdb = $('view-detail-btn'); if(vdb) vdb.onclick = () => showDetailWithAdvice(details);
+    const crb = $('close-result-btn');
+    if(crb) crb.onclick = () => {
+        $('result-modal').style.display='none'; $('exam-interface').style.display='none'; $('exam-select-card').style.display='block';
+        $('timer-bar').classList.remove('warning'); $('exam-student-id').value=''; $('exam-student-name').value='';
+        refreshAll(); if (role==='admin' && $('records-section')?.classList.contains('active')) loadRecords();
+    };
+    $('exam-interface').style.display='none'; $('exam-select-card').style.display='block'; $('timer-bar').classList.remove('warning');
+    refreshAll();
+}
+function generateEnhancedFeedback(details) {
+    const stats = { single:{t:0,c:0}, multiple:{t:0,c:0}, judge:{t:0,c:0} };
+    details.forEach(d => {
+        if (d.type==='single'){ stats.single.t++; if(d.isCorrect) stats.single.c++; }
+        else if (d.type==='multiple'){ stats.multiple.t++; if(d.isCorrect) stats.multiple.c++; }
+        else { stats.judge.t++; if(d.isCorrect) stats.judge.c++; }
+    });
+    const overallRate = details.filter(d=>d.isCorrect).length / details.length;
+    let advice = overallRate>=0.9 ? '🎉 优秀！你对知识点掌握非常扎实。' : overallRate>=0.7 ? '👍 良好，仍有提升空间。' : '📚 需要加强复习，重点巩固薄弱环节。';
+    advice += '<br><br>📊 各题型分析：';
+    advice += `<br>单选题正确率：${stats.single.t?(stats.single.c/stats.single.t*100).toFixed(0):0}%`;
+    advice += `<br>多选题正确率：${stats.multiple.t?(stats.multiple.c/stats.multiple.t*100).toFixed(0):0}%`;
+    advice += `<br>判断题正确率：${stats.judge.t?(stats.judge.c/stats.judge.t*100).toFixed(0):0}%`;
+    const weakest = [
+        {name:'单选题',r:stats.single.t?stats.single.c/stats.single.t:1},
+        {name:'多选题',r:stats.multiple.t?stats.multiple.c/stats.multiple.t:1},
+        {name:'判断题',r:stats.judge.t?stats.judge.c/stats.judge.t:1}
+    ].sort((a,b)=>a.r-b.r)[0];
+    if (weakest.r < 1) advice += `<br>🔍 最薄弱题型：<strong>${weakest.name}</strong>，建议重点练习该题型。`;
+    const wrongTopics = details.filter(d=>!d.isCorrect).map(d=>d.questionText.substring(0,20)).slice(0,5);
+    if (wrongTopics.length) advice += `<br>📌 错题涉及知识点：${wrongTopics.join('、')} 等。`;
+    advice += `<br>💡 建议回顾相关笔记，强化记忆与辨析。`;
+    return advice;
+}
+function showDetailWithAdvice(details) {
+    let h = '<div class="feedback-box">' + generateEnhancedFeedback(details) + '</div><hr>';
+    details.forEach((d,i) => {
+        h += `<p><strong>${d.isCorrect?'✅':'❌'} 第${i+1}题</strong><br>题目：${esc(d.questionText)}<br>你的答案：<span style="color:${d.isCorrect?'#166534':'#dc2626'}">${esc(String(d.userAnswer||'未作答'))}</span><br>正确答案：${esc(String(d.correctAnswer||''))}<br>💡 ${esc(d.explanation||'')}</p>`;
+    });
+    const dc = $('detail-content'); if(dc) dc.innerHTML = h;
+    $('detail-modal').style.display = 'flex';
+}
+$('close-detail-btn')?.addEventListener('click', ()=> { $('detail-modal').style.display='none'; });
+['settings-modal','result-modal','detail-modal'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('click', e=>{ if(e.target===el) el.style.display='none'; }); });
+
+// ==================== 记录管理 ====================
+async function loadRecords(){
+    if (typeof selectedRecordIds === 'undefined') window.selectedRecordIds = new Set();
+    try {
+        const { data, error } = await client.from('records').select('*').order('exam_date', { ascending: false });
+        if (error) throw error;
+        const tbody = $('records-tbody'); if (!tbody) return;
+        if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="11">暂无记录</td></tr>'; return; }
+        tbody.innerHTML = data.reverse().map((r, i) => `
+    <tr>
+        <td><input type="checkbox" class="record-checkbox" data-id="${r.id}" ${selectedRecordIds.has(r.id)?'checked':''} onchange="toggleRecordSelection('${r.id}', this)"></td>
+        <td>${data.length - i}</td>
+        <td>${new Date(r.exam_date).toLocaleString()}</td>
+        <td>${esc(r.paper_name)}</td>
+        <td>${esc(r.student_id)}</td>
+        <td>${esc(r.student_name)}</td>
+        <td><span class="score-badge ${r.score >= 80 ? 'score-high' : r.score >= 60 ? 'score-mid' : 'score-low'}">${r.score}分</span></td>
+        <td>${r.correct_count}/${r.total_questions}</td>
+        <td>${r.violations}</td>
+        <td>${r.duration}</td>
+        <td>
+            <button class="btn btn-sm btn-outline" onclick="viewRecord('${r.id}')">详情</button>
+            <button class="btn btn-sm" style="background:#f59e0b;color:#fff;" onclick="retakeRecord('${r.id}')">重考</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteRecordById('${r.id}')">删除</button>
+        </td>
+    </tr>
+`).join('');
+    } catch (e) { console.error('加载记录失败', e); toast('加载考试记录失败', true); }
+}
+function toggleRecordSelection(id, checkbox) {
+    if (!selectedRecordIds) selectedRecordIds = new Set();
+    if (checkbox.checked) selectedRecordIds.add(id);
+    else selectedRecordIds.delete(id);
+}
+function viewRecord(id) { return (async () => { const { data } = await client.from('records').select('*').eq('id', id); if(data?.[0]) showDetailWithAdvice(data[0].details); })(); }
+function retakeRecord(id) { return (async () => { if(confirm('允许重考？')){ await client.from('records').delete().eq('id', id); loadRecords(); } })(); }
+function deleteRecordById(id) { return (async () => { if(confirm('确定要删除这条记录吗？')){ await client.from('records').delete().eq('id', id); loadRecords(); toast('记录已删除'); } })(); }
+
+// ==================== 对比报告 ====================
+async function generateCompareReport() {
+    if (!selectedRecordIds || selectedRecordIds.size === 0) { toast('请先选中至少一条记录', true); return; }
+    const allRecords = await client.from('records').select('*');
+    const selected = allRecords.data.filter(r => selectedRecordIds.has(r.id));
+    if (selected.length === 0) { toast('未找到选中的记录', true); return; }
+    let html = '<table><tr><th>姓名</th><th>工号</th><th>得分</th><th>正确率</th><th>薄弱题型</th></tr>';
+    const allWrong = [];
+    selected.forEach(r => {
+        const rate = r.correct_count / r.total_questions;
+        const stats = {single:{t:0,c:0},multiple:{t:0,c:0},judge:{t:0,c:0}};
+        (r.details||[]).forEach(d => {
+            if (d.type==='single'){ stats.single.t++; if(d.isCorrect) stats.single.c++; }
+            else if (d.type==='multiple'){ stats.multiple.t++; if(d.isCorrect) stats.multiple.c++; }
+            else { stats.judge.t++; if(d.isCorrect) stats.judge.c++; }
+        });
+        const weakest = [
+            {name:'单选题',r:stats.single.t?stats.single.c/stats.single.t:1},
+            {name:'多选题',r:stats.multiple.t?stats.multiple.c/stats.multiple.t:1},
+            {name:'判断题',r:stats.judge.t?stats.judge.c/stats.judge.t:1}
+        ].sort((a,b)=>a.r-b.r)[0].name;
+        html += `<tr><td>${esc(r.student_name)}</td><td>${esc(r.student_id)}</td><td>${r.score}分</td><td>${(rate*100).toFixed(0)}%</td><td>${weakest}</td></tr>`;
+        (r.details||[]).filter(d=>!d.isCorrect).forEach(d => allWrong.push(d.questionText.substring(0,20)));
+    });
+    html += '</table><br><strong>综合建议：</strong>';
+    const common = [...new Set(allWrong)].slice(0,5);
+    html += common.length ? `共同错题涉及：${common.join('、')}，建议加强相关模块学习。` : '未发现明显共同薄弱点。';
+    $('compare-content').innerHTML = html;
+    $('compare-modal').style.display = 'flex';
+}
+$('select-all-records')?.addEventListener('change', function() {
+    const checkboxes = $$('.record-checkbox');
+    checkboxes.forEach(cb => { cb.checked = this.checked; });
+    if (!selectedRecordIds) selectedRecordIds = new Set();
+    selectedRecordIds.clear();
+    if (this.checked) checkboxes.forEach(cb => selectedRecordIds.add(cb.dataset.id));
+});
+$('compare-btn')?.addEventListener('click', generateCompareReport);
+$('close-compare-btn')?.addEventListener('click', () => { $('compare-modal').style.display = 'none'; });
+
+// ==================== 初始化 ====================
+setRole('student');
+switchSec('exam');
+</script>
 </body>
 </html>
