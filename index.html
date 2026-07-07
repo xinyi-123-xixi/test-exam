@@ -287,7 +287,7 @@ $('clear-content-btn')?.addEventListener('click', ()=>{ S.content=''; const st=$
 // ==================== AI 出题引擎 (DeepSeek) ====================
 async function generatePaperOptimized(content, paperName) {
     const API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-    const API_KEY = 'ee8ed5b1897242d6be8389dcf7437572.qezzF0yP5pT95DA7';   // 粘贴真实的 Key
+    const API_KEY = 'ee8ed5b1897242d6be8389dcf7437572.qezzF0yP5pT95DA7';  
     const MODEL = 'glm-4-flash';;
     const prompt = `你是教育专家。基于笔记生成试卷。必须严格输出恰好20道题：7道单选题（4选项）、7道多选题（5选项）、6道判断题。规则：1. 题目完整清晰，禁止省略号。2. 选项至少5字，与题目相关。3. 解析包含正确答案或错因，不能为空。4. 随机排列选项。5. 严格输出JSON。笔记：${content.substring(0, 8000)}`;
     try {
