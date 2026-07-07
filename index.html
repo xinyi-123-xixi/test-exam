@@ -286,9 +286,9 @@ $('clear-content-btn')?.addEventListener('click', ()=>{ S.content=''; const st=$
 
 // ==================== AI 出题引擎 (DeepSeek) ====================
 async function generatePaperOptimized(content, paperName) {
-    const API_URL = 'https://api.deepseek.com/v1/chat/completions';
-    const API_KEY = 'sk-7bfd9313ed9e44758000594c8701a6e8';  // ⚠️ 请替换为您的真实DeepSeek Key
-    const MODEL = 'deepseek-chat';
+    const API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+    const API_KEY = 'ee8ed5b1897242d6be8389dcf7437572.qezzF0yP5pT95DA7';   // 粘贴真实的 Key
+    const MODEL = 'glm-4-flash';;
     const prompt = `你是教育专家。基于笔记生成试卷。必须严格输出恰好20道题：7道单选题（4选项）、7道多选题（5选项）、6道判断题。规则：1. 题目完整清晰，禁止省略号。2. 选项至少5字，与题目相关。3. 解析包含正确答案或错因，不能为空。4. 随机排列选项。5. 严格输出JSON。笔记：${content.substring(0, 8000)}`;
     try {
         const response = await fetch(API_URL, { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${API_KEY}` }, body:JSON.stringify({ model:MODEL, messages:[{role:'system', content:'你输出纯净JSON。解析必须具体，不能省略。'},{role:'user', content:prompt}], temperature:0.2, max_tokens:12000 }) });
