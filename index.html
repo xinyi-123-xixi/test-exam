@@ -321,8 +321,10 @@ function generatePaperFallback(content, paperName) { /* 备用方案保持不变
 function renderPaperPreview(paper) {
     previewPaper = paper;
     previewQuestions = [...paper.questions];
-    $('#paper-preview-card').style.display = 'block';
-    $('#preview-paper-name').textContent = `- ${paper.name}`;
+    const card = document.getElementById('paper-preview-card');
+    if (card) card.style.display = 'block';
+    const nameSpan = document.getElementById('preview-paper-name');
+    if (nameSpan) nameSpan.textContent = `- ${paper.name}`;
     refreshPreviewList();
 }
 function refreshPreviewList() {
