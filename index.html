@@ -359,43 +359,44 @@ async function replaceQuestion(idx) {
     const oldQ = previewQuestions[idx];
     const type = oldQ.type;
     const prompt = `请根据以下笔记内容生成一道${type==='single'?'单选题（4个选项）':type==='multiple'?'多选题（5个选项）':'判断题'}，要求与之前不同。笔记：${S.content ? S.content.substring(0, 3000) : '相关知识点'}`;
-    
+    const API_KEY = '您的智谱API密钥'; // ⚠️ 替换为真实Key，确保是半角字符
+
     try {
         const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer 您的智谱API密钥'   // ⚠️ 替换为真实Key
+                'Authorization': `Bearer ${API_KEY}`
             },
             body: JSON.stringify({
                 model: 'glm-4-flash',
                 messages: [
-                    {role: 'system', content: '你只返回JSON格式的一道题目，不要其他文字。'},
-                    {role: 'user', content: prompt}
+                    { role: 'system', content: '你只返回JSON格式的一道题目，不要其他文字。' },
+                    { role: 'user', content: prompt }
                 ],
                 temperature: 0.3,
                 max_tokens: 1024
             })
         });
-        
+
         if (!response.ok) {
             const errText = await response.text();
             throw new Error(`HTTP ${response.status}: ${errText}`);
         }
-        
+
         const data = await response.json();
         const aiOutput = data.choices[0].message.content;
         const jsonStr = aiOutput.replace(/```json|```/g, '').trim();
         const newQ = JSON.parse(jsonStr);
-        
+
         newQ.text = cleanText(newQ.text) || `第${idx+1}题（替换题）`;
         newQ.options = (newQ.options || []).map(o => cleanText(o) || '选项待补充');
         newQ.explanation = cleanText(newQ.explanation || '暂无解析');
-        
+
         previewQuestions[idx] = newQ;
         refreshPreviewList();
         toast('替换成功');
-    } catch(e) {
+    } catch (e) {
         console.error('替换失败:', e);
         toast('替换失败: ' + e.message, true);
     }
