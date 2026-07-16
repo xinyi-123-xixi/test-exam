@@ -327,23 +327,28 @@ function renderPaperPreview(paper) {
     if (nameSpan) nameSpan.textContent = `- ${paper.name}`;
     refreshPreviewList();
 }
-function refreshPreviewList() {    
-let html = '';    
-previewQuestions.forEach((q, idx) => {        
-html += `<div class="question-block">
+function refreshPreviewList() {
+    const previewList = document.getElementById('paper-preview-list');
+    if (!previewList) {
+        console.error('预览列表容器 paper-preview-list 不存在');
+        return;
+    }
+    let html = '';
+    previewQuestions.forEach((q, idx) => {
+        html += `<div class="question-block">
             <div style="position:absolute;top:8px;right:8px;">
                 <button class="btn btn-sm btn-danger" onclick="deleteQuestion(${idx})">🗑️ 删除</button>
                 <button class="btn btn-sm btn-outline" onclick="replaceQuestion(${idx})">🔄 替换</button>
             </div>
-            <strong>第${idx+1}题</strong> (${q.type==='single'?'单选':q.type==='multiple'?'多选':'判断'})<br>            
-${esc(q.text)}<br>`;        
-if (q.type !== 'judge') {            
-q.options.forEach((opt, oi) => { html += `&nbsp;&nbsp;${String.fromCharCode(65+oi)}. ${esc(opt)}<br>`; });        
-}        
-html += `<small style="color:#22c55e;">答案：${q.correctAnswer || q.correctLabel || (q.correctLabels||[]).join(',')}</small><br>
-        <small>解析：${esc(q.explanation||'')}</small></div>`;    
-});    
-$('#paper-preview-list').innerHTML = html || '<p>暂无题目</p>';
+            <strong>第${idx+1}题</strong> (${q.type==='single'?'单选':q.type==='multiple'?'多选':'判断'})<br>
+            ${esc(q.text)}<br>`;
+        if (q.type !== 'judge') {
+            q.options.forEach((opt, oi) => { html += `&nbsp;&nbsp;${String.fromCharCode(65+oi)}. ${esc(opt)}<br>`; });
+        }
+        html += `<small style="color:#22c55e;">答案：${q.correctAnswer || q.correctLabel || (q.correctLabels||[]).join(',')}</small><br>
+        <small>解析：${esc(q.explanation||'')}</small></div>`;
+    });
+    previewList.innerHTML = html || '<p>暂无题目</p>';
 }
 async function deleteQuestion(idx) {
     if (!confirm('确定删除这道题吗？')) return;
