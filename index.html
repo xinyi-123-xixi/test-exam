@@ -160,10 +160,16 @@
     </section>
 </div>
 
-<div id="toast-container"></div>
 <div class="modal-overlay" id="settings-modal" style="display:none;">
-    <div class="modal"><h2>⚙️ 试卷设置</h2><div style="text-align:left;margin:12px 0;"><label><input type="checkbox" id="setting-visible"> 对考生公开</label></div>
-    <button class="btn btn-primary" id="save-settings-btn">保存</button><button class="btn btn-outline" id="cancel-settings-btn">取消</button></div>
+    <div class="modal"><h2>⚙️ 试卷设置</h2>
+        <div style="text-align:left;margin:12px 0;">
+            <label><input type="checkbox" id="setting-visible"> 对考生公开</label><br><br>
+            <label>开始时间：<input type="datetime-local" id="setting-start"></label><br><br>
+            <label>结束时间：<input type="datetime-local" id="setting-end"></label>
+        </div>
+        <button class="btn btn-primary" id="save-settings-btn">保存</button>
+        <button class="btn btn-outline" id="cancel-settings-btn">取消</button>
+    </div>
 </div>
 <div class="modal-overlay" id="result-modal" style="display:none;">
     <div class="modal"><h2>📊 考试成绩</h2><div class="score-display" id="result-score">0</div><p id="result-detail"></p><p id="result-violation"></p>
@@ -236,8 +242,20 @@ async function refreshAll(){
         for(const id in papers){
             const p = papers[id];
             if(role==='student' && p.visible===false) continue;
+            if (role === 'student') {
+                const now = new Date().toISOString();
+                if (p.start_time && now < p.start_time) continue;
+                if (p.end_time && now > p.end_time) continue;
+                }
             eh+=`<div class="paper-item ${selPaperId===id?'selected':''}" onclick="selPaper('${id}',this)"><span>📄 ${esc(p.name)}</span></div>`;
-            ah+=`<div style="display:flex;justify-content:space-between;padding:8px 0;"><span>📄 ${esc(p.name)} (${p.visible===false?'隐藏':'公开'})</span><span><button class="btn btn-sm btn-outline" onclick="openSet('${id}')">设置</button> <button class="btn btn-sm btn-danger" onclick="delPaper('${id}')">删除</button></span></div>`;
+            ah += `<div style="display:flex;justify-content:space-between;padding:8px 0;">
+                <span>📄 ${esc(p.name)} (${p.visible===false?'隐藏':'公开'})</span>
+                <span>
+                    <button class="btn btn-sm btn-outline" onclick="previewPaperById('${id}')">👁️ 预览</button>
+                    <button class="btn btn-sm btn-outline" onclick="openSet('${id}')">⚙️ 设置</button>
+                    <button class="btn btn-sm btn-danger" onclick="delPaper('${id}')">删除</button>
+                </span>
+            </div>`;
         }
         if(examList) examList.innerHTML=eh||'<p>暂无试卷</p>';
         if(adminList) adminList.innerHTML=ah||'<p>暂无试卷</p>';
@@ -246,8 +264,28 @@ async function refreshAll(){
 }
 window.selPaper=(id,el)=>{ $$('.paper-item').forEach(i=>i.classList.remove('selected')); el.classList.add('selected'); selPaperId=id; updateExamState(); };
 window.delPaper=async(id)=>{ if(confirm('删除？')){ await client.from('papers').delete().eq('id', id); if(selPaperId===id) selPaperId=null; refreshAll(); } };
-window.openSet=(id)=>{ curSetId=id; client.from('papers').select('*').then(({data})=>{ if(data && data.length){ const p=data[0]; const cb = $('setting-visible'); if(cb) cb.checked=p.visible!==false; } $('settings-modal').style.display='flex'; }); };
-$('save-settings-btn')?.addEventListener('click', async()=>{ if(!curSetId) return; await client.from('papers').update({visible:$('setting-visible')?.checked ?? true}).eq('id', curSetId); $('settings-modal').style.display='none'; refreshAll(); });
+window.openSet = (id) => {
+    curSetId = id;
+    client.from('papers').select('*').eq('id', id).then(({data}) => {
+        if (data && data.length) {
+            const p = data[0];
+            document.getElementById('setting-visible').checked = p.visible !== false;
+            document.getElementById('setting-start').value = p.start_time ? new Date(p.start_time).toISOString().slice(0, 16) : '';
+            document.getElementById('setting-end').value = p.end_time ? new Date(p.end_time).toISOString().slice(0, 16) : '';
+            document.getElementById('settings-modal').style.display = 'flex';
+        }
+    });
+};
+document.getElementById('save-settings-btn').addEventListener('click', async () => {
+    const updates = {
+        visible: document.getElementById('setting-visible').checked,
+        start_time: document.getElementById('setting-start').value ? new Date(document.getElementById('setting-start').value).toISOString() : null,
+        end_time: document.getElementById('setting-end').value ? new Date(document.getElementById('setting-end').value).toISOString() : null
+    };
+    await client.from('papers').update(updates).eq('id', curSetId);
+    document.getElementById('settings-modal').style.display = 'none';
+    refreshAll();
+});
 $('cancel-settings-btn')?.addEventListener('click', ()=> { $('settings-modal').style.display='none'; });
 
 async function updateExamState(){
@@ -318,6 +356,19 @@ async function generatePaperOptimized(content, paperName) {
 function generatePaperFallback(content, paperName) { /* 备用方案保持不变 */ const sentences = content.replace(/[\r\n]+/g, '\n').split(/[。！？.!?\n]+/).filter(s => s.trim().length > 10); while (sentences.length < 20) sentences.push('本知识点需要掌握核心概念与特征'); const questions = []; for (let i = 0; i < 7; i++) { const s = sentences[i]; const term = cleanText(s.substring(0, 15)); questions.push({ type:'single', text:`关于“${term}”，以下说法正确的是？`, options:[`${term}的定义`,`与${term}相反的概念`,`不属于${term}的范畴`,`对${term}的常见误解`].map(cleanText), correctIndex:0, correctLabel:'A', explanation:'请参考笔记。' }); } for (let i = 0; i < 7; i++) { const s = sentences[i+7]; const term = cleanText(s.substring(0, 15)); const opts = [`${term}的特征`,`${term}的条件`,`${term}的类型`,`无关表述`,`错误解释`].map(cleanText); questions.push({ type:'multiple', text:`以下哪些属于“${term}”的相关内容？（多选）`, options:opts, correctIndices:[0,1], correctLabels:['A','B'], explanation:'正确选项与笔记相关。' }); } for (let i = 0; i < 6; i++) { const s = sentences[i+14]; const isTrue = Math.random() > 0.5; let statement = cleanText(s.length > 60 ? s.substring(0, 60) + '（判断对错）' : s + '（判断对错）'); if (!isTrue) statement = '以下说法是否正确：' + statement; questions.push({ type:'judge', text:statement, correctAnswer:isTrue?'正确':'错误', explanation:isTrue?'陈述与笔记一致。':'陈述与笔记不符，请查阅原文。' }); } return { name:paperName, questions, visible:true, created_at:new Date().toISOString() }; }
 
 // ==================== 试卷预览与编辑 ====================
+async function previewPaperById(paperId) {
+    try {
+        const { data, error } = await client.from('papers').select('*').eq('id', paperId);
+        if (error || !data || data.length === 0) {
+            toast('试卷不存在', true);
+            return;
+        }
+        const paper = data[0];
+        renderPaperPreview(paper);   // 复用您已有的预览函数
+    } catch(e) {
+        toast('加载试卷失败', true);
+    }
+}
 function renderPaperPreview(paper) {
     previewPaper = paper;
     previewQuestions = [...paper.questions];
@@ -435,8 +486,11 @@ document.getElementById('generate-paper-btn').addEventListener('click', async fu
     btn.textContent = '⏳ AI 正在出题...';
     try {
         const paper = await generatePaperOptimized(S.content, name);
-        renderPaperPreview(paper);
-        toast('试卷生成成功，请在下方预览和编辑');
+        // 生成试卷后直接保存为草稿（不可见）
+        paper.visible = false;   // 默认不公开
+        await client.from('papers').insert(paper);
+        toast('试卷已生成并保存为草稿，请在试卷列表中预览和设置');
+        refreshAll();
     } catch (e) {
         toast('生成失败: ' + e.message, true);
     } finally {
